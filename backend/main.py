@@ -35,6 +35,7 @@ LINES = [
     {"name": "Random", "colour": "#a855f7"},
 ]
 LINE_COLOURS = {line["name"]: line["colour"] for line in LINES}
+PAIRED_LINES = {"Help": "Study", "Study": "Help"}
 
 
 SF_TIMEOUT = 8
@@ -188,13 +189,10 @@ def join(req: JoinRequest):
     if line not in LINE_COLOURS:
         raise HTTPException(400, "Unknown line")
     person = make_person(req.firstName, req.text, line, status="on_air")
-    other = next(
-        (
-            p for p in people.values()
-            if p["line"] == line and p["status"] == "on_air" and not p["isFake"]
-        ),
-        None,
-    )
+    waiting = [p for p in people.values() if p["status"] == "on_air" and not p["isFake"]]
+    other = next((p for p in waiting if p["line"] == line), None)
+    if other is None and line in PAIRED_LINES:
+        other = next((p for p in waiting if p["line"] == PAIRED_LINES[line]), None)
     people[person["id"]] = person
     if other:
         conn = {
