@@ -3,17 +3,27 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="Switchboard")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 EXPIRY = timedelta(minutes=30)
 
 LINES = [
-    {"name": "Red Line", "colour": "#e63946"},
-    {"name": "Blue Line", "colour": "#457b9d"},
-    {"name": "Green Line", "colour": "#2a9d8f"},
-    {"name": "Yellow Line", "colour": "#e9c46a"},
+    {"name": "Study", "colour": "#3b82f6"},
+    {"name": "Food", "colour": "#ff7a00"},
+    {"name": "Sport", "colour": "#22d34f"},
+    {"name": "Chat", "colour": "#ff3da5"},
+    {"name": "Help", "colour": "#ff2d2d"},
+    {"name": "Random", "colour": "#a855f7"},
 ]
 LINE_COLOURS = {line["name"]: line["colour"] for line in LINES}
 
@@ -44,12 +54,12 @@ messages: dict[str, list[dict]] = {}
 
 def seed():
     seeds = [
-        ("Alice", "Anyone up for a chat about books?", "Red Line"),
-        ("Bram", "Looking for hiking tips.", "Blue Line"),
-        ("Chloe", "Just moved to town, say hi!", "Green Line"),
-        ("Dev", "Learning Rust, send help.", "Yellow Line"),
-        ("Eli", "Late night thoughts.", "Red Line"),
-        ("Fatima", "Favourite album this week?", "Blue Line"),
+        ("Alice", "stuck on recursion", "Study"),
+        ("Bram", "craving ramen", "Food"),
+        ("Chloe", "anyone for a 5-a-side?", "Sport"),
+        ("Dev", "just moved in, say hi!", "Chat"),
+        ("Eli", "how do I book a printing slot?", "Help"),
+        ("Fatima", "is a hot dog a sandwich?", "Random"),
     ]
     created = [make_person(*s) for s in seeds]
     for p in created:
@@ -96,6 +106,12 @@ def join(req: JoinRequest):
 
 @app.get("/api/board")
 def board():
+    current = now()
+    for pid in [
+        pid for pid, p in people.items()
+        if datetime.fromisoformat(p["expiresAt"]) <= current
+    ]:
+        del people[pid]
     return {
         "people": list(people.values()),
         "connections": list(connections.values()),
