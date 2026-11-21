@@ -1,0 +1,120 @@
+{
+  "people": [
+    {
+      "id": "f6113672-7d94-4e37-b035-6854bd189241",
+      "firstName": "Alice",
+      "text": "stuck on recursion",
+      "line": "Study",
+      "colour": "#3b82f6",
+      "status": "connected",
+      "connectionId": "acec5b99-3c05-42ed-b0cd-46da3b390442",
+      "joinedAt": "2026-11-21T12:34:10.358774+00:00",
+      "expiresAt": null,
+      "isFake": true
+    },
+    {
+      "id": "2f9fea04-b2cb-4b9b-831c-edb2ee4833a4",
+      "firstName": "Bram",
+      "text": "craving ramen",
+      "line": "Food",
+      "colour": "#ff7a00",
+      "status": "connected",
+      "connectionId": "acec5b99-3c05-42ed-b0cd-46da3b390442",
+      "joinedAt": "2026-11-21T12:34:10.360407+00:00",
+      "expiresAt": null,
+      "isFake": true
+    },
+    {
+      "id": "fac8b6c6-f937-42f6-992c-6673f4458d10",
+      "firstName": "Chloe",
+      "text": "anyone for a 5-a-side?",
+      "line": "Sport",
+      "colour": "#22d34f",
+      "status": "connected",
+      "connectionId": "bfb85939-62da-434d-975e-bd9014481f6f",
+      "joinedAt": "2026-11-21T12:34:10.360414+00:00",
+      "expiresAt": null,
+      "isFake": true
+    },
+    {
+      "id": "5d055f8c-9ad0-4afe-9e97-c49bc1a1ca82",
+      "firstName": "Dev",
+      "text": "just moved in, say hi!",
+      "line": "Chat",
+      "colour": "#ff3da5",
+      "status": "connected",
+      "connectionId": "bfb85939-62da-434d-975e-bd9014481f6f",
+      "joinedAt": "2026-11-21T12:34:10.360420+00:00",
+      "expiresAt": null,
+      "isFake": true
+    },
+    {
+      "id": "8dd787b8-be9f-449e-ab14-fbabae67029f",
+      "firstName": "Eli",
+      "text": "how do I book a printing slot?",
+      "line": "Help",
+      "colour": "#ff2d2d",
+      "status": "waiting",
+      "connectionId": null,
+      "joinedAt": "2026-11-21T12:34:10.360424+00:00",
+      "expiresAt": null,
+      "isFake": true
+    },
+    {
+      "id": "37ad5ac9-0744-46a9-9e94-362b2317147d",
+      "firstName": "Fatima",
+      "text": "is a hot dog a sandwich?",
+      "line": "Random",
+      "colour": "#a855f7",
+      "status": "waiting",
+      "connectionId": null,
+      "joinedAt": "2026-11-21T12:34:10.360429+00:00",
+      "expiresAt": null,
+      "isFake": true
+    }
+  ],
+  "connections": [
+    {
+      "id": "acec5b99-3c05-42ed-b0cd-46da3b390442",
+      "personIds": [
+        "f6113672-7d94-4e37-b035-6854bd189241",
+        "2f9fea04-b2cb-4b9b-831c-edb2ee4833a4"
+      ],
+      "operatorLine": "Study"
+    },
+    {
+      "id": "bfb85939-62da-434d-975e-bd9014481f6f",
+      "personIds": [
+        "fac8b6c6-f937-42f6-992c-6673f4458d10",
+        "5d055f8c-9ad0-4afe-9e97-c49bc1a1ca82"
+      ],
+      "operatorLine": "Sport"
+    }
+  ],
+  "lines": [
+    {
+      "name": "Study",
+      "colour": "#3b82f6"
+    },
+    {
+      "name": "Food",
+      "colour": "#ff7a00"
+    },
+    {
+      "name": "Sport",
+      "colour": "#22d34f"
+    },
+    {
+      "name": "Chat",
+      "colour": "#ff3da5"
+    },
+    {
+      "name": "Help",
+      "colour": "#ff2d2d"
+    },
+    {
+      "name": "Random",
+      "colour": "#a855f7"
+    }
+  ]
+}
