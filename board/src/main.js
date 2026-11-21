@@ -2,6 +2,7 @@
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { currentUserId, fallbackBoard, loadBoardData, loadPulse, pollBoardData } from './board-data.js';
+import { createPatchAudio } from './patch-audio.js';
 import './style.css';
 
 const socketsPerLine = 4;
@@ -13,6 +14,17 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const metal = (color, roughness, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 let applyBoardSnapshot;
+const playClick = createPatchAudio();
+
+// Honour the panel's mute toggle (same localStorage key as panel/panel.js), checked on every play.
+function playPatchSound(kind) {
+  try {
+    if (window.localStorage.getItem('switchboardMuted') === '1') return;
+  } catch {
+    // localStorage can be unavailable; treat as not muted.
+  }
+  playClick(kind);
+}
 
 export function updateBoardData(snapshot) {
   applyBoardSnapshot?.(snapshot);
@@ -343,6 +355,8 @@ function renderBoard(renderer, initialSnapshot) {
       ? 1 : THREE.MathUtils.clamp((now - connection.startAt) / duration, 0, 1);
   }
 
+  let hasRenderedSnapshot = false;
+
   function applySnapshot(snapshot) {
     peopleBySlot = assignSockets(snapshot.people, lines, peopleBySlot);
     const lanesNeeded = Math.max(socketsPerLine,
@@ -363,6 +377,8 @@ function renderBoard(renderer, initialSnapshot) {
       visual.plaque.map = labelTexture(name.toUpperCase(), colour, true);
     });
     const nextConnections = new Map();
+    let plugged = false;
+    let unplugged = false;
     const now = performance.now();
     let startAt = now;
     if (!reducedMotion.matches) {
@@ -381,6 +397,7 @@ function renderBoard(renderer, initialSnapshot) {
       const colour = colourOf(peopleBySlot.get(from));
       let connection = connections.get(id);
       if (!connection) {
+        plugged = true;
         connection = { startAt, sequence: connectionSequence++ };
         if (!reducedMotion.matches) startAt += duration;
       }
@@ -391,8 +408,16 @@ function renderBoard(renderer, initialSnapshot) {
     }
 
     for (const [id, connection] of connections) {
-      if (!nextConnections.has(id)) connection.cord?.dispose();
+      if (!nextConnections.has(id)) {
+        unplugged = true;
+        connection.cord?.dispose();
+      }
     }
+    if (hasRenderedSnapshot) {
+      if (plugged) playPatchSound('plug');
+      if (unplugged) playPatchSound('unplug');
+    }
+    hasRenderedSnapshot = true;
     connections.clear();
     for (const [id, connection] of nextConnections) connections.set(id, connection);
 
