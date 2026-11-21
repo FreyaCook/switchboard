@@ -129,9 +129,17 @@ messages: dict[str, list[dict]] = {}
 def seed():
     seeds = [
         ("Alice", "stuck on recursion", "Study"),
-        ("Bram", "craving ramen", "Food"),
+        ("Ben", "need a revision buddy for calculus", "Study"),
+        ("Priya", "anyone done the stats essay?", "Study"),
+        ("Tom", "library, 3rd floor, send coffee", "Study"),
+        ("Maya", "craving ramen", "Food"),
+        ("Josh", "pizza tonight, who's in?", "Food"),
+        ("Sofia", "meal prep Sunday, any tips?", "Food"),
+        ("Kai", "cheap eats near campus?", "Food"),
         ("Chloe", "anyone for a 5-a-side?", "Sport"),
-        ("Dev", "just moved in, say hi!", "Chat"),
+        ("Dev", "morning run at 7?", "Sport"),
+        ("Ella", "just moved in, say hi!", "Chat"),
+        ("Omar", "bored in the common room", "Chat"),
         ("Eli", "how do I book a printing slot?", "Help"),
         ("Fatima", "is a hot dog a sandwich?", "Random"),
     ]
@@ -140,8 +148,10 @@ def seed():
         people[p["id"]] = p
 
     pairs = [
-        (0, 1, "Hello Alice and Bram, I've got you both on the Study line, so chat away, dears!"),
-        (2, 3, "Why, Chloe and Dev, you're through on the Sport line, go right ahead, folks!"),
+        (0, 1, "Why hello Alice and Ben, I've got you both on the Study line, so chat away, dears!"),
+        (4, 5, "Well, Maya and Josh, you're through on the Food line, go right ahead, folks!"),
+        (8, 9, "Chloe and Dev, how swell, I've connected you on the Sport line, have a ball!"),
+        (10, 11, "Hold the phone, Ella and Omar, you're connected on the Chat line, enjoy your natter!"),
     ]
     for a, b, operator_text in pairs:
         pa, pb = created[a], created[b]
@@ -275,6 +285,15 @@ def get_messages(connectionId: str):
     if connectionId not in connections:
         raise HTTPException(404, "Connection not found")
     return messages[connectionId]
+
+
+@app.post("/api/demo/reset")
+def demo_reset():
+    people.clear()
+    connections.clear()
+    messages.clear()
+    seed()
+    return {"ok": True}
 
 
 @app.get("/api/health/snowflake")
