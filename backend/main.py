@@ -89,6 +89,10 @@ class JoinRequest(BaseModel):
     line: Optional[str] = None
 
 
+class LeaveRequest(BaseModel):
+    personId: str
+
+
 class MessageRequest(BaseModel):
     connectionId: str
     personId: str
@@ -100,9 +104,43 @@ def join(req: JoinRequest):
     line = req.line or LINES[len(people) % len(LINES)]["name"]
     if line not in LINE_COLOURS:
         raise HTTPException(400, "Unknown line")
-    person = make_person(req.firstName, req.text, line)
+    person = make_person(req.firstName, req.text, line, status="on_air")
+    other = next(
+        (
+            p for p in people.values()
+            if p["line"] == line and p["status"] == "on_air" and not p["isFake"]
+        ),
+        None,
+    )
     people[person["id"]] = person
+    if other:
+        conn = {
+            "id": str(uuid.uuid4()),
+            "personIds": [other["id"], person["id"]],
+            "operatorLine": "Connecting you now, caller!",
+        }
+        connections[conn["id"]] = conn
+        messages[conn["id"]] = []
+        for p in (other, person):
+            p["status"] = "connected"
+            p["connectionId"] = conn["id"]
     return person
+
+
+@app.post("/api/leave")
+def leave(req: LeaveRequest):
+    person = people.pop(req.personId, None)
+    if not person:
+        raise HTTPException(404, "Person not found")
+    conn = connections.pop(person["connectionId"], None) if person["connectionId"] else None
+    if conn:
+        messages.pop(conn["id"], None)
+        for pid in conn["personIds"]:
+            other = people.get(pid)
+            if other:
+                other["status"] = "on_air"
+                other["connectionId"] = None
+    return {"ok": True}
 
 
 @app.get("/api/board")
