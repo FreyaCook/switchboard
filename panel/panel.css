@@ -29,7 +29,34 @@
   padding: 12px 16px;
   background: var(--brown);
   border-bottom: 4px solid var(--brass);
+  flex: none;
 }
+
+.sb-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.sb-chevron {
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-right: 3px solid var(--brass);
+  border-bottom: 3px solid var(--brass);
+  transform: translateY(-3px) rotate(45deg);
+}
+.sb-collapsed .sb-chevron { transform: translateY(3px) rotate(-135deg); }
 
 .sb-brand {
   color: var(--brass);
@@ -168,6 +195,20 @@
 
 .sb-send { display: flex; gap: 8px; }
 .sb-send .sb-input { flex: 1; min-width: 0; }
+
+@media (min-width: 768px) {
+  .sb-toggle { pointer-events: none; }
+  .sb-chevron { display: none; }
+}
+
+@media (max-width: 767px) {
+  .sb-panel { min-height: 0; max-height: 55dvh; overflow: hidden; }
+  .sb-header { height: 56px; padding-block: 0; }
+  .sb-main { overflow-y: auto; }
+  .sb-panel.sb-chatting { height: 55dvh; }
+  .sb-panel.sb-collapsed { height: 56px; }
+  .sb-panel.sb-collapsed .sb-main { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .sb-dots span, .sb-lamp { animation: none; }

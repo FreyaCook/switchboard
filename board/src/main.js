@@ -34,6 +34,27 @@ async function startBoard() {
 
 startBoard();
 
+// Keep the board clear of the overlaid panel: inset <main> by however far the panel overlaps it.
+function fitBoardToPanel() {
+  const main = document.querySelector('main');
+  const panelEl = document.querySelector('#panel');
+  if (!main || !panelEl) return;
+  const mainBox = main.getBoundingClientRect();
+  const panelBox = panelEl.getBoundingClientRect();
+  const bottom = portrait.matches ? Math.max(0, mainBox.bottom - panelBox.top) : 0;
+  const right = portrait.matches ? 0 : Math.max(0, mainBox.right - panelBox.left);
+  document.documentElement.style.setProperty('--panel-inset-bottom', `${Math.round(bottom)}px`);
+  document.documentElement.style.setProperty('--panel-inset-right', `${Math.round(right)}px`);
+}
+
+{
+  const resizeObserver = new ResizeObserver(fitBoardToPanel);
+  resizeObserver.observe(document.querySelector('main'));
+  resizeObserver.observe(document.querySelector('#panel'));
+  portrait.addEventListener('change', fitBoardToPanel);
+  fitBoardToPanel();
+}
+
 function mesh(parent, geometry, material, x = 0, y = 0, z = 0) {
   const object = new THREE.Mesh(geometry, material);
   object.position.set(x, y, z);
@@ -412,7 +433,7 @@ function renderBoard(renderer, initialSnapshot) {
 
 function assignSockets(people, lines, previous) {
   const activePeople = people
-    .filter(({ status }) => status === 'waiting' || status === 'connected')
+    .filter(({ status }) => status === 'waiting' || status === 'on_air' || status === 'connected')
     .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.id.localeCompare(b.id));
   const assigned = new Map();
   const active = new Map(activePeople.map((person) => [person.id, person]));

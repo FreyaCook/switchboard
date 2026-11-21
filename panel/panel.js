@@ -60,9 +60,21 @@ const API_BASE = "";
       mode = null;
     }
 
+    // Narrow screens: the panel is a bottom sheet that can be collapsed to its header.
+    function setSheet(collapsed, chatting) {
+      el.classList.toggle("sb-collapsed", collapsed);
+      el.classList.toggle("sb-chatting", chatting);
+      const toggle = el.querySelector(".sb-toggle");
+      if (toggle) toggle.setAttribute("aria-expanded", String(!collapsed));
+    }
+
     function header(withLeave) {
       return h("header", { class: "sb-header" },
-        h("span", { class: "sb-brand" }, "SWITCHBOARD"),
+        h("button", {
+          type: "button", class: "sb-toggle",
+          "aria-expanded": String(!el.classList.contains("sb-collapsed")),
+          onclick: () => setSheet(!el.classList.contains("sb-collapsed"), el.classList.contains("sb-chatting")),
+        }, h("span", { class: "sb-brand" }, "SWITCHBOARD"), h("span", { class: "sb-chevron", "aria-hidden": "true" })),
         withLeave ? h("button", { type: "button", class: "sb-btn sb-leave", onclick: leave }, "Leave") : null
       );
     }
@@ -121,6 +133,7 @@ const API_BASE = "";
       );
 
       el.replaceChildren(header(false), h("main", { class: "sb-main" }, form));
+      setSheet(false, false);
     }
 
     function showJoining() {
@@ -132,6 +145,7 @@ const API_BASE = "";
           h("p", { class: "sb-big", role: "status" }, "The operator is checking the lines…")
         )
       );
+      setSheet(false, false);
     }
 
     async function join(values) {
@@ -200,6 +214,7 @@ const API_BASE = "";
             "You're on air on the " + me.line + " line, waiting for a caller…")
         )
       );
+      setSheet(true, false);
     }
 
     function renderConnected(me, conn, other) {
@@ -239,6 +254,7 @@ const API_BASE = "";
           chatForm
         )
       );
+      setSheet(false, true);
     }
 
     function renderMessages(msgs, myId) {

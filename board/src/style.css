@@ -19,7 +19,10 @@ main {
   height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  padding: clamp(14px, 3vh, 32px) clamp(10px, 3vw, 40px);
+  padding: clamp(14px, 3vh, 32px)
+    calc(clamp(10px, 3vw, 40px) + var(--panel-inset-right, 0px))
+    calc(clamp(14px, 3vh, 32px) + var(--panel-inset-bottom, 0px))
+    clamp(10px, 3vw, 40px);
 }
 
 .console {
@@ -203,6 +206,6 @@ footer {
     left: 0;
     right: 0;
     bottom: 0;
-    height: min(62dvh, 520px);
+    overflow: hidden;
   }
 }
