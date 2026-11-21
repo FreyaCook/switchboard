@@ -10,6 +10,7 @@ import snowflake.connector
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv(Path(__file__).parent / ".env")
@@ -103,7 +104,7 @@ def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def make_person(first_name, text, line, status="waiting", connection_id=None, is_fake=False):
+def make_person(first_name, text, line, status="on_air", connection_id=None, is_fake=False):
     joined = now()
     return {
         "id": str(uuid.uuid4()),
@@ -137,12 +138,16 @@ def seed():
     for p in created:
         people[p["id"]] = p
 
-    for a, b in [(0, 1), (2, 3)]:
+    pairs = [
+        (0, 1, "Hello Alice and Bram, I've got you both on the Study line, so chat away, dears!"),
+        (2, 3, "Why, Chloe and Dev, you're through on the Sport line, go right ahead, folks!"),
+    ]
+    for a, b, operator_text in pairs:
         pa, pb = created[a], created[b]
         conn = {
             "id": str(uuid.uuid4()),
             "personIds": [pa["id"], pb["id"]],
-            "operatorLine": pa["line"],
+            "operatorLine": operator_text,
         }
         connections[conn["id"]] = conn
         messages[conn["id"]] = []
@@ -281,3 +286,10 @@ def health_snowflake():
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e) or type(e).__name__}
+
+
+app.mount(
+    "/panel",
+    StaticFiles(directory=Path(__file__).parent.parent / "panel", html=True),
+    name="panel",
+)
