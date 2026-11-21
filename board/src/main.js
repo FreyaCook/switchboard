@@ -2,6 +2,7 @@
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { currentUserId, fallbackBoard, loadBoardData, pollBoardData } from './board-data.js';
+import { createPatchAudio } from './patch-audio.js';
 import './style.css';
 
 const socketsPerLine = 4;
@@ -10,21 +11,26 @@ const stage = document.querySelector('#stage');
 const status = document.querySelector('#status');
 const message = document.querySelector('#message');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const playClick = createPatchAudio();
 const metal = (color, roughness, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 let applyBoardSnapshot;
 
-export function updateBoardData(snapshot) {
-  applyBoardSnapshot?.(snapshot);
+export function updateBoardData(snapshot, silent = false) {
+  applyBoardSnapshot?.(snapshot, silent);
 }
 
 async function startBoard() {
-  const snapshot = await loadBoardData().catch(() => fallbackBoard);
+  const snapshot = await loadBoardData().catch(() => null);
   try {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     stage.append(renderer.domElement);
-    applyBoardSnapshot = renderBoard(renderer, snapshot);
-    pollBoardData(updateBoardData);
+    applyBoardSnapshot = renderBoard(renderer, snapshot || fallbackBoard);
+    let hasLiveSnapshot = !!snapshot;
+    pollBoardData((nextSnapshot) => {
+      updateBoardData(nextSnapshot, !hasLiveSnapshot);
+      hasLiveSnapshot = true;
+    });
   } catch (error) {
     console.error(error);
     status.hidden = false;
@@ -88,6 +94,7 @@ function renderBoard(renderer, initialSnapshot) {
   const haloMap = glowTexture();
   let peopleBySlot = new Map();
   const connections = new Map();
+  const unplugging = new Map();
   let connectionSequence = 0;
   const haloGeometry = new THREE.PlaneGeometry(0.75, 0.75);
   const youBadge = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.28),
@@ -225,6 +232,7 @@ function renderBoard(renderer, initialSnapshot) {
       layout.cabinet.visible = true;
       sockets.forEach(({ cell }, index) => cell.position.copy(layout.positions[index]));
       for (const connection of connections.values()) buildCord(connection);
+      for (const connection of unplugging.values()) buildCord(connection);
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isPortrait ? 1.5 : 1.75));
     const aspect = width / height;
@@ -238,6 +246,7 @@ function renderBoard(renderer, initialSnapshot) {
   }
 
   const duration = 1800;
+  const unplugDuration = 240;
   const waiting = 'Stand by, searching for your connection…';
   const announcement = document.createElement('span');
   const terminalText = document.createElement('span');
@@ -258,7 +267,7 @@ function renderBoard(renderer, initialSnapshot) {
       ? 1 : THREE.MathUtils.clamp((now - connection.startAt) / duration, 0, 1);
   }
 
-  function applySnapshot(snapshot) {
+  function applySnapshot(snapshot, silent) {
     peopleBySlot = assignSockets(snapshot.people, lines, peopleBySlot);
     const socketByPerson = new Map(Array.from(peopleBySlot, ([index, person]) => [person.id, index]));
     const coloursByLine = new Map(snapshot.lines.map(({ name, colour }) => [name, colour]));
@@ -292,7 +301,12 @@ function renderBoard(renderer, initialSnapshot) {
       const colour = colourOf(peopleBySlot.get(from));
       let connection = connections.get(id);
       if (!connection) {
-        connection = { startAt, sequence: connectionSequence++ };
+        const departing = unplugging.get(id);
+        if (departing) {
+          departing.cord.dispose();
+          unplugging.delete(id);
+        }
+        connection = { startAt, sequence: connectionSequence++, soundOnSeat: !silent };
         if (!reducedMotion.matches) startAt += duration;
       }
       const changed = connection.from !== from || connection.to !== to || connection.colour !== colour;
@@ -302,7 +316,13 @@ function renderBoard(renderer, initialSnapshot) {
     }
 
     for (const [id, connection] of connections) {
-      if (!nextConnections.has(id)) connection.cord?.dispose();
+      if (nextConnections.has(id)) continue;
+      if (!silent && connection.settled) {
+        connection.unplugAt = now;
+        unplugging.set(id, connection);
+      } else {
+        connection.cord?.dispose();
+      }
     }
     connections.clear();
     for (const [id, connection] of nextConnections) connections.set(id, connection);
@@ -372,7 +392,7 @@ function renderBoard(renderer, initialSnapshot) {
     message.classList.toggle('is-typing', !!typing);
   }
 
-  applySnapshot(initialSnapshot);
+  applySnapshot(initialSnapshot, true);
   new ResizeObserver(resize).observe(stage);
   portrait.addEventListener('change', resize);
   resize();
@@ -387,8 +407,22 @@ function renderBoard(renderer, initialSnapshot) {
       const progress = progressAt(connection, now);
       connection.cord.update(progress);
       if (progress >= 1) {
+        if (!connection.settled && connection.soundOnSeat) playClick('plug');
+        connection.settled = true;
         sockets[connection.from].connected = true;
         sockets[connection.to].connected = true;
+      }
+    }
+    for (const [id, connection] of unplugging) {
+      const progress = still ? 0 : THREE.MathUtils.clamp(1 - (now - connection.unplugAt) / unplugDuration, 0, 1);
+      connection.cord.update(progress, true);
+      if (!connection.releasePlayed && connection.cord.isUnseated()) {
+        connection.releasePlayed = true;
+        playClick('unplug');
+      }
+      if (progress <= 0) {
+        connection.cord.dispose();
+        unplugging.delete(id);
       }
     }
     for (const [index, person] of peopleBySlot) {
@@ -412,7 +446,7 @@ function renderBoard(renderer, initialSnapshot) {
 
 function assignSockets(people, lines, previous) {
   const activePeople = people
-    .filter(({ status }) => status === 'waiting' || status === 'connected')
+    .filter(({ status }) => status === 'waiting' || status === 'on_air' || status === 'connected')
     .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.id.localeCompare(b.id));
   const assigned = new Map();
   const active = new Map(activePeople.map((person) => [person.id, person]));
@@ -498,18 +532,19 @@ function makeCord(board, from, to, colour, brass, darkBrass) {
   const fixed = plug();
   const moving = plug();
   const anchor = curve.getPointAt(0);
+  const seatedEnd = curve.getPointAt(1);
   const outward = new THREE.Vector3(0, 0, 1);
   const heading = new THREE.Vector3();
   let lastProgress;
 
   return {
-    update(progress) {
+    update(progress, withdrawing = false) {
       if (progress === lastProgress) return;
       lastProgress = progress;
       group.visible = progress > 0;
       const seat = THREE.MathUtils.smoothstep(progress, 0, 0.18);
       fixed.position.copy(anchor).addScaledVector(outward, (1 - seat) * 0.54);
-      const length = THREE.MathUtils.smootherstep(progress, 0.18, 1);
+      const length = withdrawing ? progress : THREE.MathUtils.smootherstep(progress, 0.18, 1);
       moving.visible = length > 0.025;
       geometry.setDrawRange(0, Math.floor(length * segments) * sides * 6);
       if (moving.visible) {
@@ -517,6 +552,9 @@ function makeCord(board, from, to, colour, brass, darkBrass) {
         curve.getTangentAt(length, heading).negate();
         moving.quaternion.setFromUnitVectors(outward, heading);
       }
+    },
+    isUnseated() {
+      return !moving.visible || moving.position.distanceToSquared(seatedEnd) >= 0.085 ** 2;
     },
     dispose() {
       group.removeFromParent();

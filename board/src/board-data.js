@@ -3,8 +3,9 @@ import fallbackBoard from './demo-board.json';
 export { fallbackBoard };
 export const currentUserId = import.meta.env.VITE_BOARD_USER_ID?.trim() || null;
 
+const defaultBaseUrl = import.meta.env.DEV ? 'https://poster-montreal-feedback-von.trycloudflare.com' : '';
 const apiBaseUrl = (import.meta.env.VITE_BOARD_API_BASE_URL?.trim()
-  || 'https://poster-montreal-feedback-von.trycloudflare.com').replace(/\/+$/, '');
+  || defaultBaseUrl).replace(/\/+$/, '');
 const pollInterval = 2000;
 
 export async function loadBoardData() {
