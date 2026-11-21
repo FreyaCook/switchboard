@@ -101,10 +101,10 @@ const API_BASE = "";
     if (!ctx) return;
     const t = ctx.currentTime;
     if (soft) {
-      tick(ctx, t, 0.25, 1200, 180);
+      tick(ctx, t, 0.375, 1200, 180);
     } else {
-      tick(ctx, t, 0.6, 2400, 260);
-      tick(ctx, t + 0.07, 0.35, 2000, 200);
+      tick(ctx, t, 0.9, 2400, 260);
+      tick(ctx, t + 0.07, 0.525, 2000, 200);
     }
   }
 
@@ -114,7 +114,7 @@ const API_BASE = "";
     const ctx = audioCtx;
     const t0 = ctx.currentTime + 0.05;
     const master = ctx.createGain();
-    master.gain.value = 0.18;
+    master.gain.value = 0.27;
     master.connect(ctx.destination);
     for (const burst of [0, 0.6]) {
       for (let i = 0; i < 12; i++) {
