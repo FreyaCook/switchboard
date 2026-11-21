@@ -350,6 +350,20 @@ function renderBoard(renderer, initialSnapshot) {
     connection.cord.update(progressAt(connection, performance.now()));
   }
 
+  // The plug click lands when the cord's animation finishes and the plug reaches the second jack.
+  function schedulePlugClick(connection) {
+    const wait = reducedMotion.matches
+      ? 0 : Math.max(0, connection.startAt + duration - performance.now());
+    window.setTimeout(() => {
+      for (const current of connections.values()) {
+        if (current === connection) {
+          playPatchSound('plug');
+          return;
+        }
+      }
+    }, wait);
+  }
+
   function progressAt(connection, now) {
     return reducedMotion.matches
       ? 1 : THREE.MathUtils.clamp((now - connection.startAt) / duration, 0, 1);
@@ -377,7 +391,7 @@ function renderBoard(renderer, initialSnapshot) {
       visual.plaque.map = labelTexture(name.toUpperCase(), colour, true);
     });
     const nextConnections = new Map();
-    let plugged = false;
+    const newConnections = [];
     let unplugged = false;
     const now = performance.now();
     let startAt = now;
@@ -397,8 +411,8 @@ function renderBoard(renderer, initialSnapshot) {
       const colour = colourOf(peopleBySlot.get(from));
       let connection = connections.get(id);
       if (!connection) {
-        plugged = true;
         connection = { startAt, sequence: connectionSequence++ };
+        newConnections.push(connection);
         if (!reducedMotion.matches) startAt += duration;
       }
       const changed = connection.from !== from || connection.to !== to || connection.colour !== colour;
@@ -414,7 +428,7 @@ function renderBoard(renderer, initialSnapshot) {
       }
     }
     if (hasRenderedSnapshot) {
-      if (plugged) playPatchSound('plug');
+      for (const connection of newConnections) schedulePlugClick(connection);
       if (unplugged) playPatchSound('unplug');
     }
     hasRenderedSnapshot = true;
@@ -487,6 +501,22 @@ function renderBoard(renderer, initialSnapshot) {
   }
 
   applySnapshot(initialSnapshot);
+
+  // Browsers block audio until the user interacts. If that was the case while the starting cords
+  // animated, replay them (with plug clicks) once, on the first click or tap.
+  function replayStartingCords() {
+    if (reducedMotion.matches) return;
+    const delay = 150; // lets the audio context finish resuming from this same click
+    const starting = Array.from(connections.values()).sort((x, y) => x.sequence - y.sequence);
+    starting.forEach((connection, index) => {
+      connection.startAt = performance.now() + delay + index * duration;
+      schedulePlugClick(connection);
+    });
+  }
+
+  if (!navigator.userActivation?.hasBeenActive) {
+    window.addEventListener('click', replayStartingCords, { once: true });
+  }
   new ResizeObserver(resize).observe(stage);
   portrait.addEventListener('change', resize);
   resize();
