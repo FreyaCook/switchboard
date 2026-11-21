@@ -247,8 +247,9 @@ def join(req: JoinRequest):
                 "SELECT %s, %s, %s, %s, TO_TIMESTAMP_TZ(%s)",
                 (person["id"], person["firstName"], person["text"], person["line"], person["joinedAt"]),
             )
-        except Exception:
-            pass
+            print("Saved status to Snowflake")
+        except Exception as e:
+            print(f"Snowflake insert failed: {str(e) or type(e).__name__}")
     return person
 
 
