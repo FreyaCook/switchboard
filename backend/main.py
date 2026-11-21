@@ -32,7 +32,7 @@ def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def make_person(first_name, text, line, status="waiting", connection_id=None):
+def make_person(first_name, text, line, status="waiting", connection_id=None, is_fake=False):
     joined = now()
     return {
         "id": str(uuid.uuid4()),
@@ -43,7 +43,8 @@ def make_person(first_name, text, line, status="waiting", connection_id=None):
         "status": status,
         "connectionId": connection_id,
         "joinedAt": joined.isoformat(),
-        "expiresAt": (joined + EXPIRY).isoformat(),
+        "expiresAt": None if is_fake else (joined + EXPIRY).isoformat(),
+        "isFake": is_fake,
     }
 
 
@@ -61,7 +62,7 @@ def seed():
         ("Eli", "how do I book a printing slot?", "Help"),
         ("Fatima", "is a hot dog a sandwich?", "Random"),
     ]
-    created = [make_person(*s) for s in seeds]
+    created = [make_person(*s, is_fake=True) for s in seeds]
     for p in created:
         people[p["id"]] = p
 
@@ -107,11 +108,15 @@ def join(req: JoinRequest):
 @app.get("/api/board")
 def board():
     current = now()
-    for pid in [
+    expired = [
         pid for pid, p in people.items()
-        if datetime.fromisoformat(p["expiresAt"]) <= current
-    ]:
+        if p["expiresAt"] and datetime.fromisoformat(p["expiresAt"]) <= current
+    ]
+    for pid in expired:
         del people[pid]
+    for cid in [c["id"] for c in connections.values() if set(c["personIds"]) & set(expired)]:
+        del connections[cid]
+        messages.pop(cid, None)
     return {
         "people": list(people.values()),
         "connections": list(connections.values()),
