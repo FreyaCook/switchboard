@@ -133,14 +133,17 @@ function renderBoard(renderer, initialSnapshot) {
       dim: metal(new THREE.Color(colour).multiplyScalar(0.075), 0.38, 0.27),
     };
   });
-  const totalSockets = lines.length * socketsPerLine;
   const nameGeometry = new THREE.PlaneGeometry(1.22, 0.25);
 
   // The slot ID belongs to the student. Only its position changes at the breakpoint.
-  const sockets = Array.from({ length: totalSockets }, (_, index) => {
+  // Slot index = lane * lines.length + lineIndex, so adding a lane never renumbers existing jacks.
+  const sockets = [];
+  let laneCount = 0;
+
+  function createSocket(index) {
     const cell = new THREE.Group();
-    const lineIndex = Math.floor(index / socketsPerLine);
-    const laneIndex = index % socketsPerLine;
+    const lineIndex = index % lines.length;
+    const laneIndex = Math.floor(index / lines.length);
     board.add(cell);
     panel(cell, 1.31, 1.16, 0.045, 0.08, face, 0, 0.13, 0.49);
     mesh(cell, socketBevel, darkBrass, 0, 0, 0.532);
@@ -167,15 +170,30 @@ function renderBoard(renderer, initialSnapshot) {
     nameplate.visible = false;
     cell.add(nameplate);
     return { cell, lamp, lit, glow, halo, dim, nameplate };
-  });
+  }
+
+  // Every line gets the same number of jacks, so a full line grows the whole board by one lane.
+  function ensureLanes(count) {
+    while (laneCount < count) {
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+        sockets.push(createSocket(laneCount * lines.length + lineIndex));
+      }
+      laneCount += 1;
+    }
+  }
+
+  ensureLanes(socketsPerLine);
 
   const layouts = new Map();
 
-  function createLayout(isPortrait) {
+  function createLayout(isPortrait, lanes) {
     const cabinet = new THREE.Group();
     board.add(cabinet);
-    const width = isPortrait ? 8.08 : 11.85;
-    const height = isPortrait ? 11.68 : 7.75;
+    const extra = lanes - socketsPerLine;
+    const extraWidth = isPortrait ? extra * 1.71 : 0;
+    const extraHeight = isPortrait ? 0 : extra * 1.31;
+    const width = (isPortrait ? 8.08 : 11.85) + extraWidth;
+    const height = (isPortrait ? 11.68 : 7.75) + extraHeight;
 
     panel(cabinet, width, height, 0.92, 0.21, edge, 0, 0, -0.37);
     panel(cabinet, width - 0.15, height - 0.10, 0.44, 0.19, walnut, 0, 0, 0.10);
@@ -189,27 +207,27 @@ function renderBoard(renderer, initialSnapshot) {
       const x = (lineIndex - 2.5) * 1.71;
       const y = (2.5 - lineIndex) * 1.62 - 0.22;
       if (isPortrait) {
-        panel(cabinet, 6.81, 1.54, 0.07, 0.055, edge, 0, y + 0.17, 0.43);
-        panel(cabinet, 6.74, 1.48, 0.075, 0.053, moduleFace, 0, y + 0.17, 0.445);
-        screw(cabinet, -3.22, y + 0.72, 0.495);
-        screw(cabinet, 3.22, y + 0.72, 0.495);
+        panel(cabinet, 6.81 + extraWidth, 1.54, 0.07, 0.055, edge, 0, y + 0.17, 0.43);
+        panel(cabinet, 6.74 + extraWidth, 1.48, 0.075, 0.053, moduleFace, 0, y + 0.17, 0.445);
+        screw(cabinet, -3.22 - extraWidth / 2, y + 0.72, 0.495);
+        screw(cabinet, 3.22 + extraWidth / 2, y + 0.72, 0.495);
       } else {
-        panel(cabinet, 1.58, 6.22, 0.07, 0.055, edge, x, -0.07, 0.43);
-        panel(cabinet, 1.52, 6.16, 0.075, 0.053, moduleFace, x, -0.07, 0.445);
-        screw(cabinet, x - 0.59, -2.98, 0.495);
-        screw(cabinet, x + 0.59, -2.98, 0.495);
+        panel(cabinet, 1.58, 6.22 + extraHeight, 0.07, 0.055, edge, x, -0.07, 0.43);
+        panel(cabinet, 1.52, 6.16 + extraHeight, 0.075, 0.053, moduleFace, x, -0.07, 0.445);
+        screw(cabinet, x - 0.59, -2.98 - extraHeight / 2, 0.495);
+        screw(cabinet, x + 0.59, -2.98 - extraHeight / 2, 0.495);
       }
 
       const plaqueX = isPortrait ? 0 : x;
-      const plaqueY = isPortrait ? y + 0.53 : 2.66;
+      const plaqueY = isPortrait ? y + 0.53 : 2.66 + extraHeight / 2;
       panel(cabinet, 1.46, 0.48, 0.062, 0.03, copper, plaqueX, plaqueY, 0.49);
       mesh(cabinet, new THREE.PlaneGeometry(1.39, 0.42),
         lineVisuals[lineIndex].plaque, plaqueX, plaqueY, 0.525);
 
-      for (let lane = 0; lane < socketsPerLine; lane += 1) {
-        positions.push(isPortrait
-          ? new THREE.Vector3((lane - 1.5) * 1.71, y, 0)
-          : new THREE.Vector3(x, 1.66 - lane * 1.31, 0));
+      for (let lane = 0; lane < lanes; lane += 1) {
+        positions[lane * lines.length + lineIndex] = isPortrait
+          ? new THREE.Vector3((lane - (lanes - 1) / 2) * 1.71, y, 0)
+          : new THREE.Vector3(x, 1.66 + extraHeight / 2 - lane * 1.31, 0);
       }
     });
 
@@ -234,12 +252,11 @@ function renderBoard(renderer, initialSnapshot) {
   camera.position.set(0, 0, 20);
   let layout;
 
-  function resize() {
-    const { clientWidth: width, clientHeight: height } = stage;
-    if (!width || !height) return;
+  function syncLayout() {
     const isPortrait = portrait.matches;
-    if (!layouts.has(isPortrait)) layouts.set(isPortrait, createLayout(isPortrait));
-    const nextLayout = layouts.get(isPortrait);
+    const key = `${isPortrait}:${laneCount}`;
+    if (!layouts.has(key)) layouts.set(key, createLayout(isPortrait, laneCount));
+    const nextLayout = layouts.get(key);
     if (layout !== nextLayout) {
       if (layout) layout.cabinet.visible = false;
       layout = nextLayout;
@@ -247,6 +264,13 @@ function renderBoard(renderer, initialSnapshot) {
       sockets.forEach(({ cell }, index) => cell.position.copy(layout.positions[index]));
       for (const connection of connections.values()) buildCord(connection);
     }
+  }
+
+  function resize() {
+    const { clientWidth: width, clientHeight: height } = stage;
+    if (!width || !height) return;
+    const isPortrait = portrait.matches;
+    syncLayout();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isPortrait ? 1.5 : 1.75));
     const aspect = width / height;
     const halfHeight = Math.max(layout.height / 2 + 0.25, (layout.width / 2 + 0.35) / aspect);
@@ -281,6 +305,10 @@ function renderBoard(renderer, initialSnapshot) {
 
   function applySnapshot(snapshot) {
     peopleBySlot = assignSockets(snapshot.people, lines, peopleBySlot);
+    const lanesNeeded = Math.max(socketsPerLine,
+      ...Array.from(peopleBySlot.keys(), (index) => Math.floor(index / lines.length) + 1));
+    ensureLanes(lanesNeeded);
+    if (layout) syncLayout();
     const socketByPerson = new Map(Array.from(peopleBySlot, ([index, person]) => [person.id, index]));
     const coloursByLine = new Map(snapshot.lines.map(({ name, colour }) => [name, colour]));
     const colourOf = (person) => person.colour || coloursByLine.get(person.line);
@@ -363,7 +391,7 @@ function renderBoard(renderer, initialSnapshot) {
         reflectionIndex += 1;
       }
     });
-    stage.setAttribute('aria-label', 'Telephone switchboard with 24 jacks.'
+    stage.setAttribute('aria-label', `Telephone switchboard with ${sockets.length} jacks.`
       + (occupants.length ? ' Occupied sockets: ' + occupants.join('; ') + '.' : ''));
   }
 
@@ -442,21 +470,13 @@ function assignSockets(people, lines, previous) {
     assigned.set(index, active.get(person.id));
     active.delete(person.id);
   }
-  const overflow = [];
+  // Each person takes the first free jack in their own line's row; rows never borrow from other lines.
   for (const person of active.values()) {
     const line = lines.findIndex(({ name }) => name === person.line);
-    const first = line * socketsPerLine;
-    let index = first;
-    while (assigned.has(index)) index += 1;
-    if (line < 0 || index >= first + socketsPerLine) overflow.push(person);
-    else assigned.set(index, person);
-  }
-
-  let free = 0;
-  for (const person of overflow) {
-    while (assigned.has(free)) free += 1;
-    if (free >= lines.length * socketsPerLine) break;
-    assigned.set(free, person);
+    if (line < 0) continue;
+    let lane = 0;
+    while (assigned.has(lane * lines.length + line)) lane += 1;
+    assigned.set(lane * lines.length + line, person);
   }
   return assigned;
 }
