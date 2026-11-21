@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -82,6 +84,27 @@ def classify_line(text):
         result = json.loads(result)
     label = result["labels"][0]
     return label if label in LINE_COLOURS else "Random"
+
+
+SWEAR_WORDS = [
+    "fuck", "shit", "bitch", "cunt", "asshole", "bastard", "dick", "slut", "whore", "nigger", "faggot",
+]
+SWEAR_PATTERN = re.compile(r"\b(?:" + "|".join(SWEAR_WORDS) + r")(?:s|ed|ing|er|y|head)?\b", re.IGNORECASE)
+
+
+def is_offensive(first_name, text):
+    combined = f"{first_name}: {text}"
+    try:
+        rows = sf_query(
+            "SELECT AI_CLASSIFY(%s, ['appropriate', 'offensive or abusive'])",
+            (combined,),
+        )
+        result = rows[0][0]
+        if isinstance(result, str):
+            result = json.loads(result)
+        return result["labels"][0] == "offensive or abusive"
+    except Exception:
+        return bool(SWEAR_PATTERN.search(combined))
 
 
 def operator_line(name_a, name_b, line):
@@ -188,6 +211,8 @@ class MessageRequest(BaseModel):
 
 @app.post("/api/join")
 def join(req: JoinRequest):
+    if is_offensive(req.firstName, req.text):
+        raise HTTPException(400, "The operator won't put that call through.")
     snowflake_ok = True
     line = req.line
     if line is None:
@@ -294,6 +319,46 @@ def demo_reset():
     messages.clear()
     seed()
     return {"ok": True}
+
+
+PULSE_CACHE_SECONDS = 30
+_pulse_cache = {"at": None, "rows": None}
+
+
+def today_rows():
+    """Today's (line, count) rows from Snowflake, cached for 30s; None if Snowflake failed."""
+    at = _pulse_cache["at"]
+    if at is not None and time.monotonic() - at < PULSE_CACHE_SECONDS:
+        return _pulse_cache["rows"]
+    try:
+        rows = sf_query(
+            "SELECT line, COUNT(*) FROM SWITCHBOARD.APP.STATUSES "
+            "WHERE created_at >= CURRENT_DATE() GROUP BY line ORDER BY COUNT(*) DESC, line"
+        )
+        rows = [(r[0], int(r[1])) for r in rows]
+    except Exception:
+        rows = None
+    _pulse_cache["at"] = time.monotonic()
+    _pulse_cache["rows"] = rows
+    return rows
+
+
+@app.get("/api/pulse")
+def pulse():
+    on_air = {line["name"]: 0 for line in LINES}
+    for p in people.values():
+        if p["line"] in on_air:
+            on_air[p["line"]] += 1
+
+    rows = today_rows()
+    if rows is None:
+        rows = sorted(((name, n) for name, n in on_air.items() if n), key=lambda r: (-r[1], r[0]))
+    busiest = {"line": rows[0][0], "count": rows[0][1]} if rows else {"line": None, "count": 0}
+    return {
+        "onAirByLine": on_air,
+        "busiestToday": busiest,
+        "totalToday": sum(n for _, n in rows),
+    }
 
 
 @app.get("/api/health/snowflake")

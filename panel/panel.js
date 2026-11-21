@@ -22,7 +22,12 @@ const API_BASE = "";
 
   async function api(path, options) {
     const res = await fetch(API_BASE + path, options);
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) {
+      const err = new Error("HTTP " + res.status);
+      err.status = res.status;
+      try { err.detail = (await res.json()).detail; } catch (e) { /* no JSON body */ }
+      throw err;
+    }
     return res.json();
   }
 
@@ -158,7 +163,9 @@ const API_BASE = "";
         saveId(personId);
         startLive();
       } catch (e) {
-        showForm(values, "The lines are busy — please try again.");
+        showForm(values, e.status === 400 && typeof e.detail === "string"
+          ? e.detail
+          : "The lines are busy — please try again.");
       }
     }
 
