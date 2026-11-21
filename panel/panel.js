@@ -49,8 +49,97 @@ const API_BASE = "";
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
   }
 
+  // ---------- Sound (Web Audio, no files) ----------
+
+  const MUTE_KEY = "switchboardMuted";
+  let muted = false;
+  try { muted = localStorage.getItem(MUTE_KEY) === "1"; } catch (e) { /* default: sound on */ }
+  let audioCtx = null;
+
+  function getCtx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { audioCtx = new AC(); } catch (e) { return null; }
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    return audioCtx;
+  }
+
+  function tick(ctx, t, amp, band, thunk) {
+    const len = Math.floor(ctx.sampleRate * 0.03);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = band;
+    filter.Q.value = 0.9;
+    const gain = ctx.createGain();
+    gain.gain.value = amp;
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start(t);
+
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(thunk, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.05);
+    const oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(amp * 0.5, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    osc.connect(oscGain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.07);
+  }
+
+  // Short mechanical click (press and release), or a softer single click.
+  function playClick(soft) {
+    if (muted) return;
+    const ctx = getCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    if (soft) {
+      tick(ctx, t, 0.25, 1200, 180);
+    } else {
+      tick(ctx, t, 0.6, 2400, 260);
+      tick(ctx, t + 0.07, 0.35, 2000, 200);
+    }
+  }
+
+  // Classic British double ring: two bursts of a fast two-tone bell trill.
+  function playRing() {
+    if (muted || !audioCtx || audioCtx.state !== "running") return;
+    const ctx = audioCtx;
+    const t0 = ctx.currentTime + 0.05;
+    const master = ctx.createGain();
+    master.gain.value = 0.18;
+    master.connect(ctx.destination);
+    for (const burst of [0, 0.6]) {
+      for (let i = 0; i < 12; i++) {
+        const t = t0 + burst + i * 0.033;
+        const base = i % 2 ? 1380 : 1500;
+        for (const [mult, amp] of [[1, 1], [1.5, 0.6], [2.15, 0.3]]) {
+          const osc = ctx.createOscillator();
+          osc.type = "sine";
+          osc.frequency.value = base * mult;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(amp, t + 0.003);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+          osc.connect(g).connect(master);
+          osc.start(t);
+          osc.stop(t + 0.06);
+        }
+      }
+    }
+  }
+
   function mountSwitchboardPanel(el) {
     el.classList.add("sb-panel");
+    // Unlock audio on the first touch inside the panel so a later ring can play.
+    el.addEventListener("pointerdown", () => { if (!muted) getCtx(); });
 
     let personId = null;
     let timer = null;
@@ -73,6 +162,21 @@ const API_BASE = "";
       if (toggle) toggle.setAttribute("aria-expanded", String(!collapsed));
     }
 
+    function muteButton() {
+      const btn = h("button", {
+        type: "button", class: "sb-btn sb-mute" + (muted ? " sb-muted" : ""),
+        role: "switch", "aria-checked": String(!muted), "aria-label": "Sound", title: "Sound on/off",
+        onclick: () => {
+          muted = !muted;
+          try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch (e) { /* ignore */ }
+          btn.classList.toggle("sb-muted", muted);
+          btn.setAttribute("aria-checked", String(!muted));
+          if (!muted) getCtx();
+        },
+      }, "♪");
+      return btn;
+    }
+
     function header(withLeave) {
       return h("header", { class: "sb-header" },
         h("button", {
@@ -80,7 +184,11 @@ const API_BASE = "";
           "aria-expanded": String(!el.classList.contains("sb-collapsed")),
           onclick: () => setSheet(!el.classList.contains("sb-collapsed"), el.classList.contains("sb-chatting")),
         }, h("span", { class: "sb-brand" }, "SWITCHBOARD"), h("span", { class: "sb-chevron", "aria-hidden": "true" })),
-        withLeave ? h("button", { type: "button", class: "sb-btn sb-leave", onclick: leave }, "Leave") : null
+        muteButton(),
+        withLeave ? h("button", {
+          type: "button", class: "sb-btn sb-leave",
+          onclick: () => { playClick(true); leave(); },
+        }, "Leave") : null
       );
     }
 
@@ -134,7 +242,7 @@ const API_BASE = "";
         h("p", { class: "sb-label" }, "Pick a line"),
         h("div", { class: "sb-lines" }, ...lineButtons),
         errorBox,
-        h("button", { type: "submit", class: "sb-btn sb-primary" }, "Go on air")
+        h("button", { type: "submit", class: "sb-btn sb-primary", onclick: () => playClick(false) }, "Go on air")
       );
 
       el.replaceChildren(header(false), h("main", { class: "sb-main" }, form));
@@ -227,6 +335,7 @@ const API_BASE = "";
     function renderConnected(me, conn, other) {
       if (mode === "connected:" + conn.id) return;
       mode = "connected:" + conn.id;
+      playRing();
 
       const log = h("div", { class: "sb-log", role: "log", "aria-live": "polite" });
       const input = h("input", {
