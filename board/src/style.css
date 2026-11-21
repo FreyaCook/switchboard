@@ -116,6 +116,19 @@ footer {
   margin: auto;
 }
 
+#pulse {
+  margin: 0 0 10px;
+  padding: 6px 11px;
+  border: 1px solid #654932;
+  border-radius: 3px;
+  background: linear-gradient(#1d120f, #302015);
+  color: #ffd89d;
+  font: clamp(10px, 1.3vw, 12px) ui-monospace, Consolas, monospace;
+  text-align: center;
+  text-shadow: 0 0 12px #ff9d45a0;
+  overflow-wrap: anywhere;
+}
+
 #legend {
   display: flex;
   justify-content: center;
@@ -202,6 +215,9 @@ footer {
     margin-inline: auto;
   }
   #legend { margin-bottom: 9px; }
+  .is-started .console > header,
+  .is-started #legend { display: none; }
+  .is-started .console { grid-template-rows: minmax(0, 1fr) auto; }
   #panel {
     left: 0;
     right: 0;

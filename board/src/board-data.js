@@ -32,6 +32,19 @@ export async function loadBoardData() {
   return snapshot;
 }
 
+export async function loadPulse() {
+  const response = await fetch(`${apiBaseUrl}/api/pulse`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(4500),
+  });
+  if (!response.ok) throw new Error(`Pulse API returned ${response.status}`);
+  const pulse = await response.json();
+  if (!pulse || typeof pulse.onAirByLine !== 'object' || pulse.onAirByLine === null) {
+    throw new Error('Invalid pulse');
+  }
+  return pulse;
+}
+
 export function pollBoardData(onSnapshot) {
   async function poll() {
     currentUserId = readCurrentUserId();

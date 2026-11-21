@@ -1,7 +1,7 @@
 ﻿import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { currentUserId, fallbackBoard, loadBoardData, pollBoardData } from './board-data.js';
+import { currentUserId, fallbackBoard, loadBoardData, loadPulse, pollBoardData } from './board-data.js';
 import './style.css';
 
 const socketsPerLine = 4;
@@ -53,6 +53,46 @@ function fitBoardToPanel() {
   resizeObserver.observe(document.querySelector('#panel'));
   portrait.addEventListener('change', fitBoardToPanel);
   fitBoardToPanel();
+}
+
+// Once the user has started (typed in the panel form, or has a saved id), narrow screens drop
+// the title and colour key; the stage's ResizeObserver re-fits the board.
+{
+  let typed = false;
+  const hasStarted = () => {
+    try {
+      if (window.localStorage.getItem('switchboardPersonId')) return true;
+    } catch {
+      // localStorage can be unavailable.
+    }
+    return typed;
+  };
+  const update = () => document.documentElement.classList.toggle('is-started', hasStarted());
+  document.querySelector('#panel')?.addEventListener('input', () => {
+    typed = true;
+    update();
+  });
+  window.setInterval(update, 1000);
+  update();
+}
+
+// Campus pulse strip: refreshed every 10 seconds, hidden whenever the request fails.
+{
+  const pulseEl = document.querySelector('#pulse');
+  async function refreshPulse() {
+    try {
+      const { onAirByLine, busiestToday } = await loadPulse();
+      const counts = Object.entries(onAirByLine).map(([name, count]) => `${count} ${name}`).join(' · ');
+      const busiest = busiestToday?.line ? ` | Busiest today: ${busiestToday.line}` : '';
+      pulseEl.textContent = `Right now: ${counts}${busiest}`;
+      pulseEl.hidden = false;
+    } catch {
+      pulseEl.hidden = true;
+    } finally {
+      window.setTimeout(refreshPulse, 10000);
+    }
+  }
+  if (pulseEl) refreshPulse();
 }
 
 function mesh(parent, geometry, material, x = 0, y = 0, z = 0) {
