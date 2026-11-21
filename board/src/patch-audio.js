@@ -1,9 +1,10 @@
 export function createPatchAudio() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return () => {};
+  if (!AudioContext) return { isReady: () => true, playClick: () => {} };
 
   let context;
   let clips;
+  let output;
   let resuming;
   let nextClickAt = 0;
 
@@ -31,14 +32,33 @@ export function createPatchAudio() {
     clips ??= { plug: makeClick(context, false), unplug: makeClick(context, true) };
     const source = context.createBufferSource();
     source.buffer = clips[kind];
-    source.connect(context.destination);
+    output ??= createClickOutput(context);
+    source.connect(output);
     source.onended = () => source.disconnect();
     const now = context.currentTime;
     source.start(now);
     nextClickAt = now + source.buffer.duration + 0.025;
   }
 
-  return playClick;
+  return {
+    isReady: () => context?.state === 'running' && !document.hidden,
+    playClick,
+  };
+}
+
+function createClickOutput(context) {
+  const boost = context.createGain();
+  boost.gain.value = 2.8;
+  const compressor = context.createDynamicsCompressor();
+  compressor.threshold.value = -13;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 5;
+  compressor.attack.value = 0.002;
+  compressor.release.value = 0.07;
+  const makeup = context.createGain();
+  makeup.gain.value = 2;
+  boost.connect(compressor).connect(makeup).connect(context.destination);
+  return boost;
 }
 
 function makeClick(context, unplug) {
@@ -54,7 +74,7 @@ function makeClick(context, unplug) {
     const attack = Math.min(1, t / 0.001);
     const impact = noise * Math.exp(-t * 330);
     const ring = (0.58 * Math.sin(t * 2 * Math.PI * (unplug ? 620 : 780))
-      + 0.22 * Math.sin(t * 2 * Math.PI * (unplug ? 1400 : 1950))) * Math.exp(-t * 145);
+      + 0.22 * Math.sin(t * 2 * Math.PI * (unplug ? 1400 : 1950))) * Math.exp(-t * 105);
     samples[i] = level * attack * (impact + ring);
   }
   return buffer;

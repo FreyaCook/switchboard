@@ -11,13 +11,13 @@ const stage = document.querySelector('#stage');
 const status = document.querySelector('#status');
 const message = document.querySelector('#message');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-const playClick = createPatchAudio();
+const patchAudio = createPatchAudio();
 const metal = (color, roughness, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 let applyBoardSnapshot;
 
-export function updateBoardData(snapshot, silent = false) {
-  applyBoardSnapshot?.(snapshot, silent);
+export function updateBoardData(snapshot, baseline = false) {
+  applyBoardSnapshot?.(snapshot, baseline);
 }
 
 async function startBoard() {
@@ -245,7 +245,10 @@ function renderBoard(renderer, initialSnapshot) {
     renderer.setSize(width, height, false);
   }
 
-  const duration = 1800;
+  const startupDuration = 1150;
+  const connectionDuration = 1800;
+  const connectionGap = 140;
+  let nextConnectionAt = 0;
   const unplugDuration = 240;
   const waiting = 'Stand by, searching for your connection…';
   const announcement = document.createElement('span');
@@ -263,11 +266,13 @@ function renderBoard(renderer, initialSnapshot) {
   }
 
   function progressAt(connection, now) {
+    if (connection.settled) return 1;
+    if (connection.startAt === null) return 0;
     return reducedMotion.matches
-      ? 1 : THREE.MathUtils.clamp((now - connection.startAt) / duration, 0, 1);
+      ? 1 : THREE.MathUtils.clamp((now - connection.startAt) / connection.duration, 0, 1);
   }
 
-  function applySnapshot(snapshot, silent) {
+  function applySnapshot(snapshot, baseline) {
     peopleBySlot = assignSockets(snapshot.people, lines, peopleBySlot);
     const socketByPerson = new Map(Array.from(peopleBySlot, ([index, person]) => [person.id, index]));
     const coloursByLine = new Map(snapshot.lines.map(({ name, colour }) => [name, colour]));
@@ -284,16 +289,6 @@ function renderBoard(renderer, initialSnapshot) {
     });
     const nextConnections = new Map();
     const now = performance.now();
-    let startAt = now;
-    if (!reducedMotion.matches) {
-      const incomingIds = new Set(snapshot.connections.map(({ id }) => id));
-      for (const [id, connection] of connections) {
-        if (incomingIds.has(id) && Number.isFinite(connection.startAt)) {
-          startAt = Math.max(startAt, connection.startAt + duration);
-        }
-      }
-    }
-
     for (const { id, personIds, operatorLine } of snapshot.connections) {
       const from = socketByPerson.get(personIds[0]);
       const to = socketByPerson.get(personIds[1]);
@@ -306,8 +301,11 @@ function renderBoard(renderer, initialSnapshot) {
           departing.cord.dispose();
           unplugging.delete(id);
         }
-        connection = { startAt, sequence: connectionSequence++, soundOnSeat: !silent };
-        if (!reducedMotion.matches) startAt += duration;
+        connection = {
+          startAt: null,
+          duration: baseline ? startupDuration : connectionDuration,
+          sequence: connectionSequence++,
+        };
       }
       const changed = connection.from !== from || connection.to !== to || connection.colour !== colour;
       Object.assign(connection, { from, to, colour, operatorLine });
@@ -317,7 +315,7 @@ function renderBoard(renderer, initialSnapshot) {
 
     for (const [id, connection] of connections) {
       if (nextConnections.has(id)) continue;
-      if (!silent && connection.settled) {
+      if (!baseline && connection.settled) {
         connection.unplugAt = now;
         unplugging.set(id, connection);
       } else {
@@ -374,7 +372,7 @@ function renderBoard(renderer, initialSnapshot) {
   function updateAnnouncement(now) {
     let latest;
     for (const connection of connections.values()) {
-      if (connection.operatorLine && (connection.startAt <= now || reducedMotion.matches)
+      if (connection.operatorLine && connection.startAt !== null && connection.startAt <= now
           && (!latest || connection.sequence > latest.sequence)) latest = connection;
     }
     const text = latest?.operatorLine || waiting;
@@ -402,13 +400,28 @@ function renderBoard(renderer, initialSnapshot) {
     const elapsed = (now - start) / 1000;
     const still = reducedMotion.matches;
 
+    // Start the next cord only after the previous one seats and its click has room to finish.
+    if (patchAudio.isReady() && now >= nextConnectionAt) {
+      let next;
+      let inProgress = false;
+      for (const connection of connections.values()) {
+        if (connection.settled) continue;
+        if (connection.startAt !== null) inProgress = true;
+        else if (!next || connection.sequence < next.sequence) next = connection;
+      }
+      if (next && !inProgress) next.startAt = now;
+    }
+
     for (const socket of sockets) socket.connected = false;
     for (const connection of connections.values()) {
       const progress = progressAt(connection, now);
       connection.cord.update(progress);
       if (progress >= 1) {
-        if (!connection.settled && connection.soundOnSeat) playClick('plug');
-        connection.settled = true;
+        if (!connection.settled) {
+          patchAudio.playClick('plug');
+          connection.settled = true;
+          nextConnectionAt = now + connectionGap;
+        }
         sockets[connection.from].connected = true;
         sockets[connection.to].connected = true;
       }
@@ -418,7 +431,7 @@ function renderBoard(renderer, initialSnapshot) {
       connection.cord.update(progress, true);
       if (!connection.releasePlayed && connection.cord.isUnseated()) {
         connection.releasePlayed = true;
-        playClick('unplug');
+        patchAudio.playClick('unplug');
       }
       if (progress <= 0) {
         connection.cord.dispose();
