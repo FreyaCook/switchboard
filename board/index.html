@@ -1,0 +1,29 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Switchboard</title>
+  </head>
+  <body>
+    <main>
+      <section class="console" aria-labelledby="title">
+        <header>
+          <div class="wordmark"><span aria-hidden="true"></span><h1 id="title">The Switchboard</h1><span aria-hidden="true"></span></div>
+          <p class="subtitle">Old connections. New possibilities.</p>
+        </header>
+        <div id="stage" role="img" aria-label="A walnut and brass telephone switchboard with 24 numbered jacks."></div>
+        <p id="status" role="status" hidden></p>
+        <footer>
+          <ul id="legend" aria-label="Line colours"></ul>
+          <div class="operator">
+            <span class="operator-label">Operator</span>
+            <p id="message" role="status"></p>
+          </div>
+        </footer>
+      </section>
+      <div id="panel"></div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
