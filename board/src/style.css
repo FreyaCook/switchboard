@@ -1,5 +1,10 @@
 ﻿* { box-sizing: border-box; }
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   color: #f4dcb4;
@@ -11,22 +16,39 @@ body {
 main {
   width: min(100%, 1560px);
   margin: auto;
-  min-height: 100svh;
+  height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(200px, 24vw, 340px);
-  gap: clamp(12px, 2vw, 30px);
+  grid-template-columns: minmax(0, 1fr);
   padding: clamp(14px, 3vh, 32px) clamp(10px, 3vw, 40px);
 }
 
 .console {
   min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(210px, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 #panel {
-  min-width: 0;
-  min-height: 120px;
+  position: fixed;
+  z-index: 10;
+  overflow-y: auto;
+  box-shadow: 0 0 30px #05060bb3;
+}
+
+#panel.sb-panel {
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  #panel {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: clamp(280px, 26vw, 380px);
+  }
 }
 
 header { text-align: center; }
@@ -166,16 +188,21 @@ footer {
     display: block;
   }
   .console {
-    align-content: center;
-    grid-template-rows: auto auto auto;
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 10px;
   }
   h1 { font-size: clamp(17px, 5.6vw, 54px); }
   #stage {
-    width: min(100%, 500px);
-    aspect-ratio: 0.72;
+    width: 100%;
+    max-width: 500px;
     margin-inline: auto;
   }
   #legend { margin-bottom: 9px; }
-  #panel { margin-top: 16px; }
+  #panel {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(62dvh, 520px);
+  }
 }

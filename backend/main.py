@@ -310,3 +310,9 @@ app.mount(
     StaticFiles(directory=Path(__file__).parent.parent / "panel", html=True),
     name="panel",
 )
+
+app.mount(
+    "/",
+    StaticFiles(directory=Path(__file__).parent.parent / "board" / "dist", html=True, check_dir=False),
+    name="board",
+)

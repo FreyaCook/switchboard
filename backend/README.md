@@ -2,6 +2,16 @@
 
 FastAPI app with in-memory storage (resets on restart).
 
+## Build the board
+
+The board must be built before the backend can serve it at `/`:
+
+```sh
+cd board
+npm install
+npm run build
+```
+
 ## Run
 
 ```sh

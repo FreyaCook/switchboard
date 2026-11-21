@@ -1,10 +1,21 @@
 import fallbackBoard from './demo-board.json';
 
 export { fallbackBoard };
-export const currentUserId = import.meta.env.VITE_BOARD_USER_ID?.trim() || null;
 
-const apiBaseUrl = (import.meta.env.VITE_BOARD_API_BASE_URL?.trim()
-  || 'https://poster-montreal-feedback-von.trycloudflare.com').replace(/\/+$/, '');
+function readCurrentUserId() {
+  try {
+    const stored = window.localStorage.getItem('switchboardPersonId')?.trim();
+    if (stored) return stored;
+  } catch {
+    // localStorage can be unavailable; fall back to the build-time id.
+  }
+  return import.meta.env.VITE_BOARD_USER_ID?.trim() || null;
+}
+
+// Live binding: re-read from localStorage on every poll.
+export let currentUserId = readCurrentUserId();
+
+const apiBaseUrl = (import.meta.env.VITE_BOARD_API_BASE_URL?.trim() || '').replace(/\/+$/, '');
 const pollInterval = 2000;
 
 export async function loadBoardData() {
@@ -23,6 +34,7 @@ export async function loadBoardData() {
 
 export function pollBoardData(onSnapshot) {
   async function poll() {
+    currentUserId = readCurrentUserId();
     try {
       // Retain the displayed snapshot during outages, including the startup fixture if needed.
       const snapshot = await loadBoardData().catch(() => null);
